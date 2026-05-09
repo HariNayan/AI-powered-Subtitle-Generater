@@ -1,14 +1,12 @@
+
 export enum AppState {
   UPLOAD = 'UPLOAD',
   PROCESSING = 'PROCESSING',
   EDITING = 'EDITING',
-  VIEWING_HIGHLIGHTS = 'VIEWING_HIGHLIGHTS',
-}
-
-export enum ProcessMode {
-  SUBTITLES = 'SUBTITLES',
   HIGHLIGHTS = 'HIGHLIGHTS',
 }
+
+export type AppMode = 'subtitles' | 'highlights';
 
 export enum StylePreset {
   STANDARD = 'STANDARD',
@@ -108,15 +106,16 @@ export interface Subtitle {
   words?: Word[];
 }
 
+export interface SrtExportOptions {
+  type: 'lines' | 'words';
+  maxCharsPerLine: number;
+  maxLinesPerCard: number;
+}
+
 export interface HighlightClip {
   title: string;
   description: string;
   start: number;
   end: number;
-}
-
-export interface SrtExportOptions {
-  type: 'lines' | 'words';
-  maxCharsPerLine: number;
-  maxLinesPerCard: number;
+  viralityScore: number;
 }

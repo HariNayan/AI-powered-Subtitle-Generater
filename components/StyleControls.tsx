@@ -16,7 +16,7 @@ interface ControlGroupProps {
 }
 
 const ControlGroup: React.FC<ControlGroupProps> = ({ label, children }) => (
-  <fieldset className="border border-white/10 rounded-lg p-4">
+  <fieldset className="border border-gray-700 rounded-lg p-4">
     <legend className="text-sm font-semibold text-gray-300 px-2">{label}</legend>
     {children}
   </fieldset>
@@ -63,8 +63,8 @@ const StyleControls: React.FC<StyleControlsProps> = ({ options, setOptions, isWo
 
   return (
     <div className="space-y-4">
-      {/* --- TYPOGRAPHY --- */}
-      <ControlGroup label="Typography">
+      {/* --- FONT STYLE --- */}
+      <ControlGroup label="Font Style">
         <div className="flex flex-col gap-4">
           <select 
               value={options.font} 
@@ -77,24 +77,6 @@ const StyleControls: React.FC<StyleControlsProps> = ({ options, setOptions, isWo
               </option>
             ))}
           </select>
-          <div className="flex items-center gap-4">
-            <input 
-                type="range" min="1" max="10" step="0.1" value={options.fontSize} 
-                onChange={e => handleStyleChange('fontSize', parseFloat(e.target.value))}
-                className="w-full"
-            />
-            <div className="relative">
-                <input 
-                    type="number" min="1" max="10" step="0.1" value={options.fontSize}
-                    onChange={e => {
-                        const val = parseFloat(e.target.value);
-                        if (!isNaN(val)) handleStyleChange('fontSize', val);
-                    }}
-                    className="w-24 bg-slate-900/80 border border-slate-700 rounded-md py-1.5 pl-3 pr-8 text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">rem</span>
-            </div>
-          </div>
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => handleStyleChange('isBold', !options.isBold)} className={`control-button ${options.isBold ? 'active' : ''}`}>Bold</button>
             <button onClick={() => handleStyleChange('isItalic', !options.isItalic)} className={`control-button ${options.isItalic ? 'active' : ''}`}>Italic</button>
@@ -106,9 +88,30 @@ const StyleControls: React.FC<StyleControlsProps> = ({ options, setOptions, isWo
         </div>
       </ControlGroup>
       
-      {/* --- SPACING --- */}
-      <ControlGroup label="Spacing">
+      {/* --- SIZE & SPACING --- */}
+      <ControlGroup label="Size & Spacing">
         <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-gray-400 block mb-1.5">Size (Zoom)</label>
+            <div className="flex items-center gap-4">
+                <input 
+                    type="range" min="0.5" max="12" step="0.1" value={options.fontSize} 
+                    onChange={e => handleStyleChange('fontSize', parseFloat(e.target.value))}
+                    className="w-full"
+                />
+                <div className="relative">
+                    <input 
+                        type="number" min="0.5" max="12" step="0.1" value={options.fontSize}
+                        onChange={e => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val)) handleStyleChange('fontSize', val);
+                        }}
+                        className="w-24 bg-gray-800 border border-gray-600 rounded-md py-1.5 pl-3 pr-8 text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">rem</span>
+                </div>
+            </div>
+          </div>
           <div>
             <label className="text-xs font-medium text-gray-400 block mb-1.5">Letter Spacing</label>
             <div className="flex items-center gap-3">
@@ -117,7 +120,7 @@ const StyleControls: React.FC<StyleControlsProps> = ({ options, setOptions, isWo
                   onChange={e => handleStyleChange('letterSpacing', parseFloat(e.target.value))}
                   className="w-full"
               />
-              <span className="text-sm text-gray-300 w-16 text-center bg-slate-900/80 border border-slate-700 rounded-md py-1">{options.letterSpacing.toFixed(3)}</span>
+              <span className="text-sm text-gray-300 w-16 text-center bg-gray-800 border border-gray-600 rounded-md py-1">{options.letterSpacing.toFixed(3)}</span>
             </div>
           </div>
           <div>
@@ -128,7 +131,7 @@ const StyleControls: React.FC<StyleControlsProps> = ({ options, setOptions, isWo
                   onChange={e => handleStyleChange('lineHeight', parseFloat(e.target.value))}
                   className="w-full"
               />
-              <span className="text-sm text-gray-300 w-16 text-center bg-slate-900/80 border border-slate-700 rounded-md py-1">{options.lineHeight.toFixed(2)}</span>
+              <span className="text-sm text-gray-300 w-16 text-center bg-gray-800 border border-gray-600 rounded-md py-1">{options.lineHeight.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -155,11 +158,11 @@ const StyleControls: React.FC<StyleControlsProps> = ({ options, setOptions, isWo
             <div className="flex items-center gap-3">
                 <button 
                     onClick={() => handleStyleChange('backgroundOpacity', isBgTransparent ? 0.5 : 0)} 
-                    className={`flex-shrink-0 w-10 h-10 rounded-md border-2 transition-colors ${isBgTransparent ? 'bg-transparent checkerboard-bg border-slate-500 hover:border-slate-400' : 'border-transparent'}`}
+                    className={`flex-shrink-0 w-10 h-10 rounded-md border-2 transition-colors ${isBgTransparent ? 'bg-transparent checkerboard-bg border-gray-500 hover:border-gray-400' : 'border-transparent'}`}
                     style={{ backgroundColor: isBgTransparent ? undefined : options.backgroundColor }}
                     title={isBgTransparent ? "Enable background" : "Disable background"}
                 >
-                    {isBgTransparent && <NoColorIcon className="w-6 h-6 m-auto text-slate-400" />}
+                    {isBgTransparent && <NoColorIcon className="w-6 h-6 m-auto text-gray-400" />}
                 </button>
                 <div className="color-input-wrapper" style={{ backgroundColor: options.backgroundColor, opacity: isBgTransparent ? 0.3 : 1 }}>
                     <input type="color" value={getValidHex(options.backgroundColor)} onChange={e => handleStyleChange('backgroundColor', e.target.value)} className="color-input" disabled={isBgTransparent} />
@@ -184,7 +187,7 @@ const StyleControls: React.FC<StyleControlsProps> = ({ options, setOptions, isWo
             <button onClick={() => handleStyleChange('effect', EffectType.OUTLINE)} className={`control-button ${options.effect === EffectType.OUTLINE ? 'active' : ''}`}>Outline</button>
         </div>
         {options.effect === EffectType.SHADOW && (
-          <div className="space-y-3 pt-2 border-t border-white/10">
+          <div className="space-y-3 pt-2 border-t border-gray-700">
             <div className="flex items-center gap-3">
               <label className="text-sm text-gray-400 w-16">Color</label>
               <div className="color-input-wrapper h-8" style={{ backgroundColor: options.shadowOptions.color }}>
@@ -208,7 +211,7 @@ const StyleControls: React.FC<StyleControlsProps> = ({ options, setOptions, isWo
           </div>
         )}
         {options.effect === EffectType.OUTLINE && (
-            <div className="space-y-3 pt-2 border-t border-white/10">
+            <div className="space-y-3 pt-2 border-t border-gray-700">
                 <div className="flex items-center gap-3">
                     <label className="text-sm text-gray-400 w-16">Color</label>
                     <div className="color-input-wrapper h-8" style={{ backgroundColor: options.strokeOptions.color }}>
@@ -228,7 +231,7 @@ const StyleControls: React.FC<StyleControlsProps> = ({ options, setOptions, isWo
           <div className="space-y-4">
               <div>
                   <label className="text-xs font-medium text-gray-400 block mb-2">Position</label>
-                  <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-slate-900/80 rounded-lg">
+                  <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-gray-800 rounded-lg">
                       {[
                           Position.TOP_LEFT, Position.TOP_CENTER, Position.TOP_RIGHT,
                           Position.MIDDLE_LEFT, Position.MIDDLE_CENTER, Position.MIDDLE_RIGHT,
@@ -237,11 +240,11 @@ const StyleControls: React.FC<StyleControlsProps> = ({ options, setOptions, isWo
                           <button
                               key={pos}
                               onClick={() => handleStyleChange('position', pos)}
-                              className={`flex items-center justify-center h-10 rounded-md transition-colors ${options.position === pos ? 'bg-indigo-600 shadow-inner shadow-black/30' : 'hover:bg-slate-700'}`}
+                              className={`flex items-center justify-center h-10 rounded-md transition-colors ${options.position === pos ? 'bg-indigo-600' : 'hover:bg-gray-700'}`}
                               title={pos.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
                               aria-label={`Set position to ${pos.replace('_', ' ')}`}
                           >
-                              <div className={`w-3 h-3 rounded-full transition-colors ${options.position === pos ? 'bg-white' : 'bg-slate-500'}`} />
+                              <div className={`w-3 h-3 rounded-full transition-colors ${options.position === pos ? 'bg-white' : 'bg-gray-500'}`} />
                           </button>
                       ))}
                   </div>

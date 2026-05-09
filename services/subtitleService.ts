@@ -1,69 +1,89 @@
-import type { Subtitle, Word, StylePreset, HighlightClip, SrtExportOptions } from '../types';
-import { processVideoForSubtitles, processVideoForHighlights } from '../server/videoProcessor';
 
-const MAX_FILE_SIZE_MB = 500;
+import type { Subtitle, Word, StylePreset, SrtExportOptions, HighlightClip } from '../types';
+import { processVideoForSubtitles, generateVideoHighlights as serverGenerateHighlights } from '../server/videoProcessor';
+
+const MAX_FILE_SIZE_MB = 1000;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+interface SubtitleRequest {
+    mediaFile?: File;
+    mediaUrl?: string;
+    targetLanguage: string;
+    stylePreset: StylePreset;
+}
 
 const validateFileSize = (file: File) => {
   if (file.size > MAX_FILE_SIZE_BYTES) {
     const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
-    throw new Error(`File is too large (${fileSizeMB}MB). Please use a file under ${MAX_FILE_SIZE_MB}MB.`);
+    throw new Error(`File Too Large|Your file is ${fileSizeMB}MB, which exceeds the ${MAX_FILE_SIZE_MB}MB limit. Please upload a smaller file.`);
   }
 };
 
 /**
- * Acts as the client-side entry point for generating subtitles.
- * It validates the file and then calls the server-side processor.
+ * Client-side entry point for generating subtitles.
  */
-export const generateSubtitles = async (mediaFile: File, targetLanguage: string, stylePreset: StylePreset): Promise<Subtitle[]> => {
-  console.log(`Requesting subtitle generation for: ${mediaFile.name} (Target Language: ${targetLanguage}, Preset: ${stylePreset})`);
-  validateFileSize(mediaFile);
+export const generateSubtitles = async (options: SubtitleRequest): Promise<Subtitle[]> => {
+  const { mediaFile, mediaUrl } = options;
 
-  // In a real app, this would be an API call (e.g., using fetch) to a backend endpoint.
-  // Here, we're directly calling the simulated server-side function.
+  if (mediaFile) {
+    validateFileSize(mediaFile);
+  } else if (!mediaUrl) {
+    throw new Error("No media source provided.");
+  }
+
   try {
-    const subtitles = await processVideoForSubtitles(mediaFile, targetLanguage, stylePreset);
+    const subtitles = await processVideoForSubtitles(options);
     return subtitles;
   } catch (error) {
-    console.error("Error during server-side processing:", error);
-    // Re-throw or handle the error as appropriate for the client UI
+    console.error("Error during subtitle processing:", error);
     if (error instanceof Error) {
-        throw new Error(error.message); // Pass the user-friendly message from the processor
+        throw new Error(error.message);
     }
     throw new Error("An unknown error occurred on the server.");
   }
 };
 
 /**
- * Client-side entry point for generating highlight clips.
+ * Client-side entry point for generating highlights.
  */
-export const generateHighlights = async (mediaFile: File): Promise<HighlightClip[]> => {
-  console.log(`Requesting highlight generation for: ${mediaFile.name}`);
-  validateFileSize(mediaFile);
+export const generateHighlights = async (options: SubtitleRequest): Promise<HighlightClip[]> => {
+    const { mediaFile, mediaUrl } = options;
   
-  try {
-    const clips = await processVideoForHighlights(mediaFile);
-    return clips;
-  } catch (error) {
-    console.error("Error during highlight processing:", error);
-    if (error instanceof Error) {
-        throw new Error(error.message);
+    if (mediaFile) {
+      validateFileSize(mediaFile);
+    } else if (!mediaUrl) {
+      throw new Error("No media source provided.");
     }
-    throw new Error("An unknown error occurred while finding highlights.");
-  }
+  
+    try {
+      const clips = await serverGenerateHighlights(options);
+      return clips;
+    } catch (error) {
+      console.error("Error during highlight generation:", error);
+      if (error instanceof Error) {
+          throw new Error(error.message);
+      }
+      throw new Error("An unknown error occurred on the server.");
+    }
 };
 
 
 const formatTimestamp = (seconds: number, format: 'srt' | 'vtt'): string => {
+    if (isNaN(seconds) || seconds < 0) {
+        seconds = 0;
+    }
+
     const date = new Date(0);
     date.setSeconds(seconds);
+
     const hours = date.getUTCHours().toString().padStart(2, '0');
     const minutes = date.getUTCMinutes().toString().padStart(2, '0');
     const secs = date.getUTCSeconds().toString().padStart(2, '0');
     const ms = date.getUTCMilliseconds().toString().padStart(3, '0');
+
     const separator = format === 'srt' ? ',' : '.';
     return `${hours}:${minutes}:${secs}${separator}${ms}`;
-}
+};
 
 const rewrapSubtitles = (subtitles: Subtitle[], maxCharsPerLine: number, maxLinesPerCard: number): Subtitle[] => {
     const newSubtitles: Subtitle[] = [];
@@ -114,7 +134,6 @@ export const exportToSRT = (subtitles: Subtitle[], options: SrtExportOptions): s
   if (options.type === 'words') {
     const words: Word[] = subtitles.flatMap(sub => sub.words || []);
     if (words.length === 0) {
-        // Fallback to line-based export if word data is unavailable
         return exportToSRT(subtitles, { ...options, type: 'lines' });
     }
     return words.map((word, index) => {
@@ -124,7 +143,6 @@ export const exportToSRT = (subtitles: Subtitle[], options: SrtExportOptions): s
     }).join('\n');
   }
   
-  // Default 'lines' logic
   let subtitlesToExport = subtitles;
   if (options.type === 'lines' && options.maxCharsPerLine > 0 && options.maxLinesPerCard > 0) {
       subtitlesToExport = rewrapSubtitles(subtitles, options.maxCharsPerLine, options.maxLinesPerCard);

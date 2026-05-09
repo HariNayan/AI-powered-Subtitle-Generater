@@ -31,11 +31,11 @@ const ExportModal: React.FC<ExportModalProps> = ({
 
   return (
     <div 
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70"
         onClick={onClose}
     >
       <div 
-        className="ui-panel w-full max-w-md p-6 m-4 text-white relative animate-fade-in"
+        className="ui-panel w-full max-w-md p-6 m-4 text-white relative"
         onClick={e => e.stopPropagation()}
       >
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
@@ -63,7 +63,7 @@ const ExportModal: React.FC<ExportModalProps> = ({
                             value={exportOptions.maxCharsPerLine}
                             onChange={e => handleNumericChange('maxCharsPerLine', e.target.value)}
                             onClick={e => e.stopPropagation()}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="w-full bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
                     </div>
                     <div>
@@ -74,7 +74,7 @@ const ExportModal: React.FC<ExportModalProps> = ({
                             value={exportOptions.maxLinesPerCard}
                             onChange={e => handleNumericChange('maxLinesPerCard', e.target.value)}
                             onClick={e => e.stopPropagation()}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="w-full bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
                     </div>
                 </div>
@@ -114,32 +114,24 @@ const ExportModal: React.FC<ExportModalProps> = ({
             align-items: flex-start;
             gap: 1rem;
             padding: 1rem;
-            border: 2px solid #4a5568; /* slate-700 */
-            background-color: #2d3748; /* gray-800 */
+            border: 2px solid var(--color-border);
+            background-color: #1f2937; /* gray-800 */
             border-radius: 0.5rem;
             text-align: left;
             transition: all 0.2s;
             cursor: pointer;
         }
         .option-card:hover:not(:disabled) {
-            border-color: #718096; /* gray-500 */
+            border-color: var(--color-border-hover);
             background-color: #374151; /* gray-700 */
         }
         .option-card.active {
             border-color: var(--color-primary);
             background-color: rgba(79, 70, 229, 0.2);
-            box-shadow: 0 0 0 1px var(--color-primary);
         }
         .option-card:disabled:hover {
-             border-color: #4a5568;
-             background-color: #2d3748;
-        }
-        @keyframes fade-in {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        .animate-fade-in {
-            animation: fade-in 0.2s ease-out forwards;
+             border-color: var(--color-border);
+             background-color: #1f2937;
         }
       `}</style>
     </div>

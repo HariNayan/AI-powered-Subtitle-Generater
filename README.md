@@ -1,51 +1,48 @@
-# AI Video Subtitle Generator 🎬🤖
+# AI Video Subtitle Generator
 
-An AI-powered web application that allows creators to automatically generate, style, and export captions for their videos. Built with React, TypeScript, and Google's Gemini API, this tool turns raw videos into engaging, social-media-ready content in minutes.
+An AI-powered web tool that automatically transcribes videos, generates styled subtitles (optimized for platforms like TikTok/Reels), and automatically extracts the best highlight clips from your content using the Gemini 2.5 API.
 
-## ✨ Features
+## Features
 
-- **🤖 AI-Powered Subtitles**: Highly accurate, automatic caption generation using the Gemini AI model.
-- **🎨 Advanced Customization**: Fully customize your captions with adjustable fonts, sizing, colors, strokes, and drop shadows to match your brand.
-- **🪄 1-Click Style Presets**: Instantly apply popular caption styles like *TikTok*, *Minimalist*, *Bold Outline*, and *Pop 3D*.
-- **⚡ Dynamic Animations**: Keep viewers engaged with word-by-word reveals and karaoke-style text tracking.
-- **✂️ Auto-Highlights**: AI intelligently analyzes your video to generate the most engaging highlight clips.
-- **💾 Flexible Export**: Download your finished subtitles in standard `.SRT` or `.VTT` formats to use in any video editor (Premiere, Final Cut, CapCut, etc.).
+- **Auto-Transcription**: Leverage Gemini 2.5 Flash to automatically transcribe audio and video files. 
+- **Auto-Translation**: Translate spoken words into your target language on-the-fly.
+- **Dynamic Styling**: Pick from multiple high-converting presets (TikTok, Minimalist, Bold Outline) to make your subtitles pop.
+- **Keyword Highlights & Emojis**: Automatically emphasize key words or inject relevant emojis into the transcript.
+- **Viral Highlight Extraction**: Automatically analyze videos to find the best 15-60 second clips, ranked by "Virality Score", so you can easily repurpose content for TikTok, Youtube Shorts, or Instagram Reels.
+- **Client-Side Exporting**: Burn subtitles into the video or export them as standard `.srt` / `.vtt` files instantly.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-- **Frontend:** React 19, TypeScript, Vite
-- **Styling:** Tailwind CSS
-- **AI Integration:** Google Gemini API (`@google/genai`)
-- **Deployment:** [Your deployment platform, e.g., Vercel / Netlify / Cloud Run]
+- **Framework**: [React 19](https://react.dev/)
+- **Build Tool**: [Vite](https://vitejs.dev/)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
+- **AI Integration**: [Google Gen AI SDK](https://github.com/google/genai-js) + **Gemini 2.5 Flash**
 
-## 🚀 Getting Started
+## Getting Started
 
-### Prerequisites
-- Node.js (v18 or higher)
-- A Google Gemini API Key
-
-### Installation
-
-1. Clone the repository:
+1. Clone the repository and install the dependencies.
    ```bash
-   git clone https://github.com/yourusername/ai-subtitle-generator.git
-   cd ai-subtitle-generator
-Install dependencies:
-code
-Bash
-npm install
-Set up environment variables:
-Create a .env file in the root directory and add your Gemini API Key:
-code
-Env
-GEMINI_API_KEY=your_api_key_here
-Start the development server:
-code
-Bash
-npm run dev
-Open your browser and navigate to http://localhost:3000.
-💡 How to Use
-Upload: Drag and drop your video file into the upload zone.
-Process: Wait a few moments while the AI analyzes the audio and generates the transcript.
-Customize: Use the style editor to change fonts, colors, and animations, or pick a pre-made preset.
-Export: Download the .SRT or .VTT file and import it into your favorite video editing software!
+   npm install
+   ```
+2. Create a `.env.local` file at the root of the project and add your Gemini API Key.
+   ```env
+   GEMINI_API_KEY=your-api-key
+   ```
+3. Run the development server.
+   ```bash
+   npm run dev
+   ```
+
+## Production Build
+
+To build the tool for production, simply run:
+```bash
+npm run build
+```
+This command bundles your application for production deployment, taking full advantage of code-splitting (using React Lazy loading) and optimized Vite bundling.
+
+## Performance Optimization
+
+- Heavy components (`SubtitleEditor`, `HighlightViewer`) are lazily loaded to drastically improve the initial Time To Interactive (TTI).
+- Tailwind CSS is statically compiled.
+- Uses direct API streaming when possible and chunks interactions to prevent browser main-thread freezes.

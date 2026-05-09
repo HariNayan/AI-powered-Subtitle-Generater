@@ -1,5 +1,6 @@
 {
   "name": "AI Video Subtitle Generator",
   "description": "An AI-powered tool to automatically generate, style, and export subtitles for your videos. Upload a video, customize the appearance of the captions, and download the result as an SRT/VTT file or preview the burned-in version.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": []
 }

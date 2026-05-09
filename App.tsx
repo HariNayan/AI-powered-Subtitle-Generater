@@ -1,19 +1,25 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { AppState, StyleOptions, Subtitle, Font, Position, Animation, EffectType, TextCase, StylePreset, ProcessMode, HighlightClip } from './types';
+
+import React, { useState, useCallback, useEffect, Suspense, lazy } from 'react';
+import { AppState, StyleOptions, Subtitle, Font, Position, Animation, EffectType, TextCase, StylePreset, AppMode, HighlightClip } from './types';
 import VideoUpload from './components/VideoUpload';
-import SubtitleEditor from './components/SubtitleEditor';
-import HighlightViewer from './components/HighlightViewer';
 import Loader from './components/Loader';
 import { generateSubtitles, generateHighlights } from './services/subtitleService';
 import { GithubIcon } from './components/icons';
 
+const SubtitleEditor = lazy(() => import('./components/SubtitleEditor'));
+const HighlightViewer = lazy(() => import('./components/HighlightViewer'));
+
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.UPLOAD);
   const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [subtitles, setSubtitles] = useState<Subtitle[] | null>(null);
   const [highlightClips, setHighlightClips] = useState<HighlightClip[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  
+  // Store the current mode to switch text in Loader
+  const [currentMode, setCurrentMode] = useState<AppMode>('subtitles');
 
   const [styleOptions, setStyleOptions] = useState<StyleOptions>({
     font: Font.MODERN,
@@ -50,43 +56,57 @@ const App: React.FC = () => {
     animation: Animation.WORD,
   });
 
-  // Effect to simulate progress when in the PROCESSING state
   useEffect(() => {
     if (appState !== AppState.PROCESSING) return;
 
+    // Update faster for smoother animation (every 200ms)
     const interval = setInterval(() => {
       setProgress(prev => {
-        if (prev >= 95) {
-          clearInterval(interval);
-          return 95;
-        }
-        // Simulate a non-linear, more "realistic" progress update
-        const increment = Math.random() * 5 + 1; // Increment by 1-6%
+        if (prev >= 95) return 95;
+        
+        // Asymptotic progress: moves 5% of the remaining distance each tick
+        // This makes it fast initially and slows down naturally as it approaches 95%
+        const remaining = 95 - prev;
+        const increment = Math.max(0.2, remaining * 0.05); 
+        
         return Math.min(prev + increment, 95);
       });
-    }, 400);
+    }, 200);
 
     return () => clearInterval(interval);
   }, [appState]);
 
-
-  const handleFileUpload = useCallback(async (file: File, targetLanguage: string, stylePreset: StylePreset, processMode: ProcessMode) => {
-    setMediaFile(file);
-    setAppState(AppState.PROCESSING);
-    setProgress(0);
-    setError(null);
+  const resetState = () => {
+    setMediaFile(null);
+    setMediaUrl(null);
     setSubtitles(null);
     setHighlightClips(null);
+    setError(null);
+    setProgress(0);
+    setAppState(AppState.UPLOAD);
+  };
+  
+  const handleBack = () => {
+    resetState();
+  };
 
-    try {
-      if (processMode === ProcessMode.SUBTITLES) {
-        const generatedSubtitles = await generateSubtitles(file, targetLanguage, stylePreset);
-        setProgress(100);
-        setSubtitles(generatedSubtitles);
-        setAppState(AppState.EDITING);
-        
-        // Apply specific style configurations for presets
-        switch (stylePreset) {
+  const handleError = (err: unknown) => {
+    console.error("An application error occurred:", err);
+    const rawMessage = err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.';
+    
+    let structuredError: string;
+    if (rawMessage.includes('|')) {
+      structuredError = rawMessage;
+    } else {
+      structuredError = 'Request Failed|' + rawMessage;
+    }
+    
+    setError(structuredError);
+    setAppState(AppState.UPLOAD);
+  }
+
+  const applyStylePreset = (stylePreset: StylePreset) => {
+     switch (stylePreset) {
           case StylePreset.TIKTOK:
             setStyleOptions(prev => ({
                 ...prev,
@@ -170,104 +190,139 @@ const App: React.FC = () => {
             }));
             break;
         }
-      } else { // ProcessMode.HIGHLIGHTS
-        const generatedClips = await generateHighlights(file);
+  }
+
+  const handleFileUpload = useCallback(async (file: File, targetLanguage: string, stylePreset: StylePreset, mode: AppMode) => {
+    resetState();
+    setMediaFile(file);
+    setCurrentMode(mode);
+    setAppState(AppState.PROCESSING);
+
+    try {
+      if (mode === 'subtitles') {
+        const generatedSubtitles = await generateSubtitles({ mediaFile: file, targetLanguage, stylePreset });
         setProgress(100);
-        setHighlightClips(generatedClips);
-        setAppState(AppState.VIEWING_HIGHLIGHTS);
+        setSubtitles(generatedSubtitles);
+        setAppState(AppState.EDITING);
+        applyStylePreset(stylePreset);
+      } else {
+        const clips = await generateHighlights({ mediaFile: file, targetLanguage, stylePreset });
+        setProgress(100);
+        setHighlightClips(clips);
+        setAppState(AppState.HIGHLIGHTS);
       }
     } catch (err) {
-      console.error(err);
-      const rawMessage = err instanceof Error ? err.message : 'Failed to process your request. Please try again.';
-      
-      // Create a structured error string for better display: "Title|Message"
-      let structuredError = 'Request Failed|' + rawMessage;
-
-      if (rawMessage.toLowerCase().includes('api key')) {
-        structuredError = 'API Key Error|' + rawMessage;
-      } else if (rawMessage.toLowerCase().includes('quota')) {
-        structuredError = 'Quota Exceeded|' + rawMessage;
-      } else if (rawMessage.toLowerCase().includes('file is too large')) {
-        const sizeMessage = rawMessage.replace('File is too large', 'Your file');
-        structuredError = 'File Too Large|' + sizeMessage;
-      } else if (rawMessage.toLowerCase().includes('network')) {
-        structuredError = 'Network Error|' + rawMessage;
-      } else if (rawMessage.toLowerCase().includes('parse')) {
-        structuredError = 'AI Response Error|' + rawMessage;
-      }
-      
-      setError(structuredError);
-      setAppState(AppState.UPLOAD);
+      handleError(err);
     }
   }, []);
   
-  const handleUrlSubmit = useCallback((url: string) => {
-    console.log(`URL submitted for processing: ${url}`);
-    setError('URL Processing Not Supported|This demo processes files directly. In a production app, a server would fetch the video from your link to begin analysis. This UI is for demonstration purposes.');
-    setAppState(AppState.UPLOAD);
+  const handleUrlSubmit = useCallback(async (url: string, targetLanguage: string, stylePreset: StylePreset, mode: AppMode) => {
+    resetState();
+    setMediaUrl(url);
+    setCurrentMode(mode);
+    setAppState(AppState.PROCESSING);
+    
+    try {
+      if (mode === 'subtitles') {
+        const generatedSubtitles = await generateSubtitles({ mediaUrl: url, targetLanguage, stylePreset });
+        setProgress(100);
+        setSubtitles(generatedSubtitles);
+        setAppState(AppState.EDITING);
+        applyStylePreset(stylePreset);
+      } else {
+        const clips = await generateHighlights({ mediaUrl: url, targetLanguage, stylePreset });
+        setProgress(100);
+        setHighlightClips(clips);
+        setAppState(AppState.HIGHLIGHTS);
+      }
+    } catch (err) {
+      handleError(err);
+    }
   }, []);
   
-  const handleBack = () => {
-    setMediaFile(null);
-    setSubtitles(null);
-    setHighlightClips(null);
-    setError(null);
-    setProgress(0);
-    setAppState(AppState.UPLOAD);
-  };
+  const getMediaSource = (): File | string => {
+    if (mediaFile) return mediaFile;
+    if (mediaUrl) return mediaUrl;
+    throw new Error("No media source available.");
+  }
 
   const renderContent = () => {
     switch (appState) {
       case AppState.UPLOAD:
-        return <VideoUpload onUpload={handleFileUpload} onUrlSubmit={handleUrlSubmit} error={error} />;
+        return (
+            <div className="w-full h-full overflow-y-auto p-4 flex items-center justify-center">
+                 <VideoUpload onUpload={handleFileUpload} onUrlSubmit={handleUrlSubmit} error={error} />
+            </div>
+        );
       case AppState.PROCESSING:
-        return <Loader message="Analyzing your media file... This may take a few minutes." progress={progress} />;
+        return (
+             <div className="w-full h-full overflow-y-auto p-4 flex items-center justify-center">
+                <Loader message={currentMode === 'subtitles' ? "Transcribing and styling..." : "AI is watching your video to find the best moments..."} progress={progress} />
+             </div>
+        );
       case AppState.EDITING:
-        if (mediaFile && subtitles) {
+        if (subtitles) {
           return (
-            <SubtitleEditor
-              mediaFile={mediaFile}
-              subtitles={subtitles}
-              setSubtitles={setSubtitles}
-              styleOptions={styleOptions}
-              setStyleOptions={setStyleOptions}
-              onBack={handleBack}
-            />
+            <div className="w-full h-full p-4 lg:p-6 overflow-hidden flex flex-col">
+              <Suspense fallback={<Loader message="Loading editor..." progress={100} />}>
+                <SubtitleEditor
+                mediaSource={getMediaSource()}
+                subtitles={subtitles}
+                setSubtitles={setSubtitles}
+                styleOptions={styleOptions}
+                setStyleOptions={setStyleOptions}
+                onBack={handleBack}
+                />
+              </Suspense>
+            </div>
           );
         }
-        return <VideoUpload onUpload={handleFileUpload} onUrlSubmit={handleUrlSubmit} error="Something went wrong. Please upload again." />;
-      case AppState.VIEWING_HIGHLIGHTS:
-        if (mediaFile && highlightClips) {
+        return (
+            <div className="w-full h-full overflow-y-auto p-4 flex items-center justify-center">
+                <VideoUpload onUpload={handleFileUpload} onUrlSubmit={handleUrlSubmit} error="Something went wrong. Please upload again." />
+            </div>
+        );
+      case AppState.HIGHLIGHTS:
+          if (highlightClips) {
+              return (
+                <div className="w-full h-full p-4 lg:p-6 overflow-hidden flex flex-col">
+                  <Suspense fallback={<Loader message="Loading viewer..." progress={100} />}>
+                    <HighlightViewer 
+                      mediaSource={getMediaSource()}
+                      clips={highlightClips}
+                      onBack={handleBack}
+                    />
+                  </Suspense>
+                </div>
+              )
+          }
           return (
-            <HighlightViewer
-              mediaFile={mediaFile}
-              clips={highlightClips}
-              onBack={handleBack}
-            />
+             <div className="w-full h-full overflow-y-auto p-4 flex items-center justify-center">
+                <VideoUpload onUpload={handleFileUpload} onUrlSubmit={handleUrlSubmit} error="Something went wrong. Please upload again." />
+             </div>
           );
-        }
-        return <VideoUpload onUpload={handleFileUpload} onUrlSubmit={handleUrlSubmit} error="Something went wrong. Please upload again." />;
       default:
         return null;
     }
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-gray-100 flex flex-col">
-      <header className="w-full p-4 bg-transparent backdrop-blur-lg sticky top-0 z-50">
+    <div className="h-screen bg-[#030712] text-gray-100 flex flex-col overflow-hidden font-sans">
+      <header className="w-full p-4 bg-gray-950/50 backdrop-blur-sm border-b border-gray-800 flex-shrink-0 z-50">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <h1 className="text-3xl font-black tracking-tighter gradient-text">
-            AI Subtitle Generator
+          <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
+                Gemini
+            </span>
+            <span className="text-gray-200 font-bold">Studio</span>
           </h1>
           <a href="https://github.com/google/genai-js" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors">
             <GithubIcon className="w-6 h-6" />
           </a>
         </div>
       </header>
-      <main className="flex-grow flex items-center justify-center">
-        <div key={appState} className="w-full h-full flex items-center justify-center">
+      <main className="flex-grow overflow-hidden relative w-full flex flex-col">
           {renderContent()}
-        </div>
       </main>
     </div>
   );

@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Subtitle, StyleOptions, Word, Position } from '../types';
 import { Animation, EffectType } from '../types';
+import { PlayIcon, PauseIcon, VolumeUpIcon, VolumeMutedIcon } from './icons';
 
 interface VideoPlayerProps {
-  mediaFile: File;
+  mediaSource: File | string;
   subtitles?: Subtitle[];
   styleOptions?: StyleOptions;
   playbackRange?: { start: number; end: number } | null;
-  forceAspectRatio?: '9/16';
+  onDurationChange?: (duration: number) => void;
+  onVideoLoad?: (meta: { width: number; height: number; duration: number }) => void;
 }
+
+const SUBTITLE_PRELOAD_SECONDS = 0.5; // Show subtitles 500ms early to improve perceived sync
 
 // Helper function to convert HEX to RGBA for opacity
 const hexToRgba = (hex: string, opacity: number): string => {
@@ -87,6 +91,22 @@ const getTextAlign = (position: Position): 'left' | 'center' | 'right' => {
   return 'center';
 };
 
+const formatTime = (seconds: number): string => {
+    if (isNaN(seconds) || seconds < 0) {
+        return '00:00';
+    }
+    const date = new Date(0);
+    date.setSeconds(seconds);
+    const hours = date.getUTCHours();
+    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+    const secs = date.getUTCSeconds().toString().padStart(2, '0');
+
+    if (hours > 0) {
+        return `${hours}:${minutes}:${secs}`;
+    }
+    return `${minutes}:${secs}`;
+};
+
 
 // Define component outside to prevent re-creation on re-renders
 const SubtitleDisplay: React.FC<{
@@ -160,42 +180,196 @@ const SubtitleDisplay: React.FC<{
     );
 };
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ mediaFile, subtitles, styleOptions, playbackRange, forceAspectRatio }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ mediaSource, subtitles, styleOptions, playbackRange, onDurationChange, onVideoLoad }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
-    const mediaUrl = useRef(URL.createObjectURL(mediaFile));
+    const containerRef = useRef<HTMLDivElement>(null);
+    const controlsTimeoutRef = useRef<number | null>(null);
+    const objectUrlRef = useRef<string | null>(null);
+    const frameCallbackIdRef = useRef<number | null>(null);
 
     const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
+    const [volume, setVolume] = useState(1);
     const [activeSubtitle, setActiveSubtitle] = useState<Subtitle | null>(null);
+    const [isControlsVisible, setIsControlsVisible] = useState(false);
+    const [showPlayPauseIndicator, setShowPlayPauseIndicator] = useState(false);
 
-    const videoObjectFitClass = forceAspectRatio === '9/16' ? 'object-cover' : 'object-contain';
+    const videoObjectFitClass = 'object-contain';
 
+    const videoSrc = typeof mediaSource === 'string' 
+        ? mediaSource 
+        : (objectUrlRef.current || (objectUrlRef.current = URL.createObjectURL(mediaSource)));
+
+    const hideControls = () => {
+        if (controlsTimeoutRef.current) {
+            clearTimeout(controlsTimeoutRef.current);
+        }
+        controlsTimeoutRef.current = window.setTimeout(() => {
+            if (isPlaying) {
+                 setIsControlsVisible(false);
+            }
+        }, 2000);
+    };
+
+    const showControls = () => {
+        if (controlsTimeoutRef.current) {
+            clearTimeout(controlsTimeoutRef.current);
+        }
+        setIsControlsVisible(true);
+        if(isPlaying) {
+            hideControls();
+        }
+    };
+    
+    const togglePlayPause = () => {
+        const video = videoRef.current;
+        if (!video) return;
+
+        if (video.paused) {
+            video.play();
+        } else {
+            video.pause();
+        }
+        
+        setShowPlayPauseIndicator(true);
+        setTimeout(() => setShowPlayPauseIndicator(false), 500);
+    };
+
+    const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const video = videoRef.current;
+        if (!video) return;
+        const seekTime = Number(e.target.value);
+        video.currentTime = seekTime;
+        setCurrentTime(seekTime);
+    };
+
+    const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const video = videoRef.current;
+        if (!video) return;
+        const newVolume = Number(e.target.value);
+        video.volume = newVolume;
+        setVolume(newVolume);
+        video.muted = newVolume === 0;
+        setIsMuted(newVolume === 0);
+    };
+
+    const toggleMute = () => {
+        const video = videoRef.current;
+        if (!video) return;
+        const currentlyMuted = !video.muted;
+        video.muted = currentlyMuted;
+        setIsMuted(currentlyMuted);
+
+        if (!currentlyMuted && video.volume === 0) {
+            const newVolume = 0.5;
+            video.volume = newVolume;
+            setVolume(newVolume);
+        }
+    };
+
+    // Main update loop using requestVideoFrameCallback for perfectly synchronized subtitle display.
+    // This is more accurate than the 'timeupdate' event, which fires less frequently.
     useEffect(() => {
         const video = videoRef.current;
         if (!video) return;
 
-        const handleTimeUpdate = () => {
-            const now = video.currentTime;
-            setCurrentTime(now);
+        // --- Per-frame processing logic ---
+        const processFrame = (now: DOMHighResTimeStamp, metadata: VideoFrameCallbackMetadata) => {
+            const mediaTime = metadata.mediaTime;
+            setCurrentTime(mediaTime);
 
-            if (subtitles && styleOptions) {
-                const currentSubtitle = subtitles.find(sub => now >= sub.start && now <= sub.end) || null;
-                if (currentSubtitle !== activeSubtitle) {
-                    setActiveSubtitle(currentSubtitle);
-                }
+            // Update active subtitle
+            if (subtitles) {
+                // By checking for the subtitle slightly ahead of time, we compensate for potential
+                // transcription delays from the AI and improve perceived synchronization.
+                const currentSubtitle = subtitles.find(sub => mediaTime >= (sub.start - SUBTITLE_PRELOAD_SECONDS) && mediaTime <= sub.end) || null;
+                // Avoid re-renders if the active subtitle hasn't changed
+                setActiveSubtitle(prev => {
+                    if (prev?.start === currentSubtitle?.start && prev?.text === currentSubtitle?.text) {
+                        return prev;
+                    }
+                    return currentSubtitle;
+                });
             }
 
-            if (playbackRange && now >= playbackRange.end) {
+            // Handle playback range for highlight clips
+            if (playbackRange && mediaTime >= playbackRange.end && !video.seeking) {
                 video.pause();
+                video.currentTime = playbackRange.start;
+            }
+
+            // Re-register the callback to continue the loop while the video is playing
+            frameCallbackIdRef.current = video.requestVideoFrameCallback(processFrame);
+        };
+        
+        const startLoop = () => {
+            if (frameCallbackIdRef.current) {
+                video.cancelVideoFrameCallback(frameCallbackIdRef.current);
+            }
+            frameCallbackIdRef.current = video.requestVideoFrameCallback(processFrame);
+        };
+
+        const stopLoop = () => {
+            if (frameCallbackIdRef.current) {
+                video.cancelVideoFrameCallback(frameCallbackIdRef.current);
+                frameCallbackIdRef.current = null;
             }
         };
 
-        video.addEventListener('timeupdate', handleTimeUpdate);
-
-        return () => {
-            video.removeEventListener('timeupdate', handleTimeUpdate);
+        // --- Event Listeners ---
+        const handleLoadedMetadata = () => {
+            setDuration(video.duration);
+            onDurationChange?.(video.duration);
+            onVideoLoad?.({
+                width: video.videoWidth,
+                height: video.videoHeight,
+                duration: video.duration
+            });
         };
-    }, [subtitles, styleOptions, activeSubtitle, playbackRange]);
+        const handlePlay = () => {
+            setIsPlaying(true);
+            hideControls();
+            startLoop(); // Start the high-precision loop on play
+        };
+        const handlePause = () => {
+            setIsPlaying(false);
+            if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+            setIsControlsVisible(true);
+            stopLoop(); // Stop the loop on pause or end
+        };
+        const handleVolume = () => {
+            if (video) {
+                setIsMuted(video.muted);
+                setVolume(video.volume);
+            }
+        };
+
+        // Bind event listeners
+        video.addEventListener('loadedmetadata', handleLoadedMetadata);
+        video.addEventListener('play', handlePlay);
+        video.addEventListener('pause', handlePause);
+        video.addEventListener('ended', handlePause);
+        video.addEventListener('volumechange', handleVolume);
+
+        setIsControlsVisible(true); // Show controls on initial load
+
+        // Cleanup
+        return () => {
+            stopLoop(); // Stop any running loops on unmount
+            video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+            video.removeEventListener('play', handlePlay);
+            video.removeEventListener('pause', handlePause);
+            video.removeEventListener('ended', handlePause);
+            video.removeEventListener('volumechange', handleVolume);
+            if (controlsTimeoutRef.current) {
+                clearTimeout(controlsTimeoutRef.current);
+            }
+        };
+    }, [subtitles, playbackRange, onDurationChange, onVideoLoad]); // Re-run effect when subtitles/range/callback change
     
+    // Effect to handle seeking to the start of a highlight clip
     useEffect(() => {
         const video = videoRef.current;
         if (video && playbackRange) {
@@ -204,22 +378,72 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ mediaFile, subtitles, styleOp
         }
     }, [playbackRange]);
 
+    // Effect for cleaning up the object URL
     useEffect(() => {
-        // Cleanup the object URL when the component unmounts
-        const url = mediaUrl.current;
-        return () => {
-            URL.revokeObjectURL(url);
-        };
+        const url = objectUrlRef.current;
+        return () => { if (url) URL.revokeObjectURL(url); };
     }, []);
+    
+    const progressStyle = {
+        background: `linear-gradient(to right, var(--color-primary) ${ (currentTime / duration) * 100 }%, rgba(255, 255, 255, 0.3) ${ (currentTime / duration) * 100 }%)`
+    };
 
     return (
-        <div className="w-full h-full relative">
+        <div 
+            ref={containerRef}
+            className={`video-container w-full h-full relative bg-black ${isControlsVisible ? 'controls-visible' : ''} ${showPlayPauseIndicator ? 'show-play-pause-indicator' : ''}`}
+            onMouseMove={showControls}
+            onMouseLeave={() => isPlaying && hideControls()}
+        >
             <video
                 ref={videoRef}
-                src={mediaUrl.current}
-                controls
+                src={videoSrc}
                 className={`w-full h-full ${videoObjectFitClass}`}
+                onClick={togglePlayPause}
+                onDoubleClick={() => videoRef.current?.requestFullscreen()}
             />
+            
+            <div className="video-controls-overlay">
+                <input
+                    type="range"
+                    min="0"
+                    max={duration || 0}
+                    value={currentTime}
+                    onChange={handleSeek}
+                    className="seek-bar"
+                    style={progressStyle}
+                />
+                <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center gap-2">
+                        <button onClick={togglePlayPause} className="video-control-button" aria-label={isPlaying ? 'Pause' : 'Play'}>
+                            {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
+                        </button>
+                        <div className="flex items-center gap-2 group">
+                             <button onClick={toggleMute} className="video-control-button" aria-label={isMuted ? 'Unmute' : 'Mute'}>
+                                {isMuted || volume === 0 ? <VolumeMutedIcon className="w-6 h-6" /> : <VolumeUpIcon className="w-6 h-6" />}
+                            </button>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                                value={isMuted ? 0 : volume}
+                                onChange={handleVolumeChange}
+                                className="volume-slider"
+                                aria-label="Volume control"
+                            />
+                        </div>
+                    </div>
+                    <div className="text-sm font-mono text-white">
+                        {formatTime(currentTime)} / {formatTime(duration)}
+                    </div>
+                </div>
+            </div>
+
+            <div className="play-pause-overlay">
+              {!isPlaying ? <PlayIcon className="w-8 h-8 text-white"/> : <PauseIcon className="w-8 h-8 text-white"/>}
+            </div>
+
             {activeSubtitle && styleOptions && (
                 <SubtitleDisplay 
                     activeSubtitle={activeSubtitle} 

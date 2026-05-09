@@ -10,7 +10,7 @@ const Loader: React.FC<LoaderProps> = ({ message, progress }) => {
   const displayProgress = Math.round(progress);
 
   return (
-    <div className="flex flex-col items-center justify-center text-center p-8 ui-panel animate-fadeInUp w-full max-w-lg">
+    <div className="flex flex-col items-center justify-center text-center p-8 ui-panel w-full max-w-lg">
       <svg
         className="animate-spin h-12 w-12 text-indigo-400 mb-6"
         xmlns="http://www.w3.org/2000/svg"
@@ -35,9 +35,9 @@ const Loader: React.FC<LoaderProps> = ({ message, progress }) => {
       <p className="text-gray-400 mt-2 max-w-sm">The AI is working its magic. Please keep this tab open. Larger files may take a bit longer.</p>
 
       <div className="w-full mt-8">
-        <div className="bg-slate-700 rounded-full h-3 overflow-hidden shadow-inner">
+        <div className="bg-gray-700 rounded-full h-3 overflow-hidden">
           <div
-            className="bg-gradient-to-r from-indigo-500 to-purple-500 h-3 rounded-full transition-all duration-500 ease-out shadow-lg"
+            className="bg-indigo-600 h-3 rounded-full transition-all duration-500 ease-out"
             style={{ width: `${displayProgress}%` }}
             role="progressbar"
             aria-valuenow={displayProgress}
